@@ -263,7 +263,18 @@ def run_full_sector_check(our_sectors: list[str]) -> str:
     print(f"[STEP 2] Done: {len(ths_sectors)} THS sectors")
 
     if not em_sectors and not ths_sectors:
+        print("[FALLBACK] Both sources failed, loading from local JSON...")
+        try:
+            base = os.path.join(os.path.dirname(os.path.dirname(__file__)), "block", "output")
+            with open(os.path.join(base, "em_name_names.json"), "r", encoding="utf-8") as f:
+                em_sectors = json.load(f)
+            with open(os.path.join(base, "ths_name_names.json"), "r", encoding="utf-8") as f:
+                ths_sectors = json.load(f)
+            print(f"[FALLBACK] Loaded {len(em_sectors)} EM + {len(ths_sectors)} THS sectors from local JSON")
+        except Exception as e:
+            print(f"[FALLBACK] Local JSON also failed: {e}")
         return "## 板块分析失败\n\n呜呜～伊蕾娜酱抓取不到数据呢，可能是网络问题，主人稍后再试试吧～"
+
 
     print("[STEP 3] Running LLM comparison...")
     result = run_comparison(our_sectors, em_sectors, ths_sectors)
