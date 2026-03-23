@@ -25,6 +25,8 @@ DINGTALK_APP_SECRET = os.environ.get("DINGTALK_APP_SECRET", "")
 LLM_BASE_URL = os.environ.get("LLM_BASE_URL", "https://api.longcat.chat/openai/v1")
 LLM_API_KEY = os.environ.get("LLM_API_KEY", "")
 LLM_MODEL_ID = os.environ.get("LLM_MODEL_ID", "LongCat-Flash-Chat")
+# If "true", run sector check once when the service starts
+RUN_ON_STARTUP = os.environ.get("RUN_ON_STARTUP", "true").lower() in ("true", "1", "yes")
 
 # In-memory state (initialized from env vars, updatable via chat)
 _state = {
@@ -202,6 +204,7 @@ def scheduled_sector_check():
 
 # ── Routes ────────────────────────────────────────────────────────
 
+@app.route("/", methods=["GET"])
 @app.route("/health", methods=["GET"])
 def health():
     return "OK"
@@ -280,6 +283,29 @@ scheduler.add_job(
     id="daily_sector_check",
 )
 scheduler.start()
+
+# ── Startup info ─────────────────────────────────────────────────
+
+print("=" * 50)
+print("[STARTUP] DingTalk Bot is starting...")
+print(f"[STARTUP] OUR_SECTORS: {_state['our_sectors'] or '(empty)'}")
+print(f"[STARTUP] CONVERSATION_ID: {'set' if _state['conversation_id'] else '(empty)'}")
+print(f"[STARTUP] LLM_API_KEY: {'set' if LLM_API_KEY else '(empty)'}")
+print(f"[STARTUP] DINGTALK_APP_SECRET: {'set' if DINGTALK_APP_SECRET else '(empty)'}")
+print(f"[STARTUP] RUN_ON_STARTUP: {RUN_ON_STARTUP}")
+print(f"[STARTUP] Scheduler started, next fire at 08:30 Asia/Shanghai")
+print("=" * 50)
+
+# Run sector check on startup (works around free-tier sleep missing cron)
+if RUN_ON_STARTUP and _state["our_sectors"] and _state["conversation_id"]:
+    print("[STARTUP] Triggering sector check on boot...")
+    _startup_thread = threading.Thread(
+        target=_run_sector_check,
+        args=(list(_state["our_sectors"]), _state["conversation_id"]),
+    )
+    _startup_thread.start()
+elif RUN_ON_STARTUP:
+    print("[STARTUP] Skipping startup check: sectors or conversationId not configured")
 
 
 if __name__ == "__main__":
